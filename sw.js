@@ -1,5 +1,5 @@
 // Guarda la app en el celular para que funcione sin señal en el campo.
-const CACHE = 'hipsometro-v4';
+const CACHE = 'hipsometro-v5';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

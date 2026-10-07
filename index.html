@@ -70,6 +70,22 @@
   .shot:active{transform:scale(.97)}
   .hint{align-self:stretch;text-align:center;font-weight:600;font-size:13.5px;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.6);text-shadow:0 1px 2px #000}
 
+  /* Realidad aumentada */
+  .ar{position:fixed;inset:0;z-index:20;background:transparent}
+  .ar.wait>*{visibility:hidden}
+  .arret{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+  .arret::before,.arret::after{content:"";position:absolute;background:var(--ok);box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+  .arret::before{width:2px;height:56px;left:-1px;top:-28px}
+  .arret::after{height:2px;width:56px;top:-1px;left:-28px}
+  .arret.mid::before,.arret.mid::after{background:var(--warn)}
+  .arret.bad::before,.arret.bad::after{background:var(--bad)}
+  .arhud{position:absolute;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .chip{pointer-events:auto;border:1px solid var(--line);background:rgba(13,20,16,.85);border-radius:99px;padding:9px 14px;font-weight:600;color:var(--ink)}
+  .chip.on{background:var(--accent);color:#16200f;border-color:var(--accent)}
+  .arbar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .arres{font-family:var(--num);font-size:17px;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.6);border-radius:10px;padding:4px 10px;text-shadow:0 1px 2px #000;text-align:center}
+  .live i{display:block;font-style:normal;font-size:14.5px;color:var(--mute);white-space:normal}
+
   /* Panel */
   .sheet{flex:0 0 auto;max-height:40vh;overflow-y:auto;background:var(--panel);border-top:1px solid var(--line);padding:0 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
   .tabs{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 0;background:var(--panel)}
@@ -128,8 +144,31 @@
   </svg>
   <h1>Altura y copa<br><span>con la cámara</span></h1>
   <p>Marca el primer punto donde inicia la raíz del árbol y sube la mira: una línea va mostrando la altura en metros y centímetros. Para la copa, marca el centro y gira hacia el borde para ampliar el radio.</p>
+  <button class="btn primary" id="goAR" style="flex:0 0 auto" hidden>Medir con realidad aumentada (sin cinta)</button>
   <button class="btn primary" id="go" style="flex:0 0 auto">Toca para empezar a medir</button>
+  <button class="btn ghost" id="goReg" style="flex:0 0 auto">Ver registros guardados</button>
   <p class="msg" id="startMsg"></p>
+</div>
+
+<div class="ar wait" id="ar" hidden>
+  <svg class="ov" aria-hidden="true"><line id="arL"/><circle id="arA" r="7"/><circle id="arB" r="5"/><circle id="arBase" r="9"/></svg>
+  <div class="arret" id="arRet"></div>
+  <div class="arhud">
+    <div class="stab" id="arStab">Buscando suelo</div>
+    <button class="chip" id="arExit">✕ Salir</button>
+  </div>
+  <div class="dock">
+    <div class="live" id="arLive" hidden><small id="arT"></small><b id="arM"></b><span id="arC"></span><i id="arF"></i></div>
+    <button class="shot" id="arShot">Marcar base (raíz)</button>
+    <div class="hint" id="arHint">Apunta al suelo y mueve el celular despacio</div>
+    <div class="arres" id="arRes"></div>
+    <div class="arbar">
+      <button class="chip on" id="arAlt">Altura</button>
+      <button class="chip" id="arCopa">Copa</button>
+      <button class="chip" id="arSave">Guardar</button>
+      <button class="chip" id="arNew">Nuevo árbol</button>
+    </div>
+  </div>
 </div>
 
 <div class="view">
@@ -241,6 +280,9 @@
       <button class="btn" id="share">Compartir</button>
       <button class="btn ghost" id="clear">Borrar todo</button>
     </div>
+    <div class="row">
+      <button class="btn ghost" id="home">Volver al inicio</button>
+    </div>
   </section>
 
   <details style="margin-top:14px">
@@ -262,7 +304,7 @@
   const R = Math.PI / 180;
   const buf = [];
   let elev = null, head = null, spread = 99, haveSensor = false;
-  const CALKEY = 'hipsometro.cal.v1';
+  const CALKEY = 'hipsometro.cal.v2';
   let cal = 0;   // corrección de inclinación en grados, obtenida al calibrar
   try { cal = parseFloat(localStorage.getItem(CALKEY)) || 0; } catch(_){}
 
@@ -453,7 +495,7 @@
     l.setAttribute('x1',pts[0]); l.setAttribute('y1',pts[1]); l.setAttribute('x2',pts[2]); l.setAttribute('y2',pts[3]);
     A.setAttribute('cx',pts[0]); A.setAttribute('cy',pts[1]); B.setAttribute('cx',pts[2]); B.setAttribute('cy',pts[3]);
     if (val!=null && val<0) val=0;
-    $('liveT').textContent = title;
+    $('liveT').textContent = title + ' · D ' + fx(tab==='alt' ? currentD().d : num('distC')) + ' m';
     $('liveM').textContent = fx(val,2)+' m';
     $('liveC').textContent = val==null ? 'falta la distancia' : Math.round(val*100)+' cm';
   }
@@ -479,7 +521,9 @@
     let lo=-6, hi=6;
     if (g(lo)*g(hi) > 0) return showCal('No se pudo calibrar: la diferencia es demasiado grande para venir del sensor. Revisa la distancia y la altura real, y mide desde más cerca (punta a más de 30°).', true);
     for (let i=0;i<40;i++){ const mid=(lo+hi)/2; if (g(lo)*g(mid) <= 0) hi=mid; else lo=mid; }
-    setCal(cal + (lo+hi)/2);
+    const n = cal + (lo+hi)/2;
+    if (Math.abs(n) > 6) return showCal('La corrección acumulada pasa de 6°: eso no es un error normal del sensor. Toca «Quitar» y revisa la distancia.', true);
+    setCal(n);
   });
   $('calReset').addEventListener('click', () => setCal(0));
 
@@ -600,6 +644,172 @@
   $('clear').addEventListener('click', () => {
     if (!armed){ armed=true; $('clear').textContent='Toca otra vez para borrar'; setTimeout(()=>{armed=false; $('clear').textContent='Borrar todo';},3000); return; }
     rows=[]; persist(); renderTable(); armed=false; $('clear').textContent='Borrar todo';
+  });
+
+  $('goReg').addEventListener('click', () => { $('start').hidden = true; document.querySelector('.tab[data-tab="reg"]').click(); });
+  $('home').addEventListener('click', () => { $('start').hidden = false; });
+
+  // ---- Realidad aumentada (WebXR en Android/Chrome): mide como la app Medir, sin cinta ----
+  // El teléfono sigue su propia posición en 3D. La base se marca sobre el suelo; la distancia D y la
+  // altura de la cámara h salen de esa posición, así que no hay que escribir nada.
+  const AR = {s:null, gl:null, ref:null, hit:null, tab:'alt', B:null, H:null, D:null, Hform:'', edges:[], yG:null, cur:null, live:null, flash:'', flashT:0};
+  const xr = navigator.xr;
+  if (xr && xr.isSessionSupported) xr.isSessionSupported('immersive-ar').then(ok => {
+    if (!ok) return;
+    $('goAR').hidden = false; $('go').classList.remove('primary'); $('go').textContent = 'Medir con el sensor de inclinación (con cinta)';
+  }).catch(() => {});
+
+  const mul4 = (a,b) => { const o=new Array(16); for (let c=0;c<4;c++) for (let r=0;r<4;r++){ let v=0; for (let k=0;k<4;k++) v+=a[k*4+r]*b[c*4+k]; o[c*4+r]=v; } return o; };
+  const clipPt = (m,p) => [m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], m[3]*p[0]+m[7]*p[1]+m[11]*p[2]+m[15]];
+  // Proyecta un segmento 3D a la pantalla, recortando lo que queda detrás de la cámara
+  function segScreen(m,a,b,W,Hh){
+    let A=clipPt(m,a), Bc=clipPt(m,b); const e=0.05;
+    if (A[2]<e && Bc[2]<e) return null;
+    const cut=(p,q)=>{ const k=(e-p[2])/(q[2]-p[2]); return [p[0]+(q[0]-p[0])*k, p[1]+(q[1]-p[1])*k, e]; };
+    if (A[2]<e) A=cut(A,Bc); else if (Bc[2]<e) Bc=cut(Bc,A);
+    const sc=p=>[(p[0]/p[2]*.5+.5)*W, (1-(p[1]/p[2]*.5+.5))*Hh];
+    return [sc(A), sc(Bc)];
+  }
+  const arR = () => AR.edges.length ? AR.edges.reduce((a,b)=>a+b,0)/AR.edges.length : null;
+  function arFlash(t){ AR.flash=t; AR.flashT=Date.now()+2600; $('arHint').textContent=t; }
+  function arReset(){ AR.B=null; AR.H=null; AR.D=null; AR.Hform=''; AR.edges=[]; AR.live=null; }
+  function arUI(){
+    $('arAlt').classList.toggle('on', AR.tab==='alt'); $('arCopa').classList.toggle('on', AR.tab==='copa');
+    $('arShot').textContent = !AR.B ? (AR.tab==='alt' ? 'Marcar base (raíz)' : 'Marcar centro (raíz)') :
+                              AR.tab==='alt' ? (AR.H==null ? 'Marcar punta' : '↺ Medir otra vez') : 'Marcar borde '+(AR.edges.length+1);
+    const r=arR();
+    $('arRes').textContent = 'Altura '+(AR.H==null?'—':fx(AR.H,2)+' m')+' · Radio '+(r==null?'—':fx(r,2)+' m ('+AR.edges.length+')')+(r==null?'':' · Área '+fx(Math.PI*r*r)+' m²');
+  }
+
+  async function startAR(){
+    const msg=$('startMsg'), root=$('ar'); msg.textContent=''; msg.className='msg';
+    root.classList.add('wait'); root.hidden=false;
+    try {
+      const s = await xr.requestSession('immersive-ar', {requiredFeatures:['hit-test','dom-overlay'], domOverlay:{root}});
+      const gl = document.createElement('canvas').getContext('webgl', {xrCompatible:true});
+      s.updateRenderState({baseLayer:new XRWebGLLayer(s, gl)});
+      AR.ref = await s.requestReferenceSpace('local');
+      AR.hit = await s.requestHitTestSource({space: await s.requestReferenceSpace('viewer')});
+      AR.s=s; AR.gl=gl; AR.yG=null; AR.cur=null;
+      s.addEventListener('end', () => { AR.s=null; AR.hit=null; root.hidden=true; if (!started) $('start').hidden=false; renderTable(); });
+      root.classList.remove('wait'); $('start').hidden=true;
+      arReset(); arUI();
+      s.requestAnimationFrame(arFrame);
+    } catch(err){
+      root.hidden=true;
+      msg.textContent='No se pudo iniciar la realidad aumentada ('+(err && err.message || err)+'). Instala o actualiza «Servicios de Google Play para RA», o usa el sensor de inclinación.';
+      msg.className='msg err';
+    }
+  }
+  $('goAR').addEventListener('click', startAR);
+
+  function arFrame(t, frame){
+    const s=frame.session; s.requestAnimationFrame(arFrame);
+    AR.gl.bindFramebuffer(AR.gl.FRAMEBUFFER, s.renderState.baseLayer.framebuffer);
+    const now=Date.now(), hint=x=>{ if (now>AR.flashT) $('arHint').textContent=x; };
+    const stab=$('arStab'), ret=$('arRet');
+    const pose=frame.getViewerPose(AR.ref);
+    if (!pose || !pose.views.length){
+      AR.cur=null; stab.textContent='Sin seguimiento'; stab.className='stab bad'; ret.className='arret bad';
+      hint('Mueve el celular despacio para que reconozca el entorno'); return;
+    }
+    const v=pose.views[0], m=v.transform.matrix;
+    const O=[m[12],m[13],m[14]], d=[-m[8],-m[9],-m[10]];
+    const PV=mul4(v.projectionMatrix, v.transform.inverse.matrix);
+    const W=$('ar').clientWidth, Hh=$('ar').clientHeight;
+
+    // Suelo bajo la mira: detectado por la cámara o, si no alcanza, el plano del suelo ya detectado
+    let aim=null, direct=false;
+    for (const h of frame.getHitTestResults(AR.hit)){
+      const hp=h.getPose(AR.ref); if (!hp) continue;
+      const hm=hp.transform.matrix;
+      if (hm[5]>0.9 && hm[13]<O[1]-0.3){ aim=[hm[12],hm[13],hm[14]]; direct=true; AR.yG=hm[13]; break; }
+    }
+    if (!aim && AR.yG!=null && d[1]<-0.035){
+      const k=(AR.yG-O[1])/d[1];
+      if (k<80) aim=[O[0]+d[0]*k, AR.yG, O[2]+d[2]*k];
+    }
+    AR.cur={aim};
+    stab.textContent = direct ? 'Suelo detectado' : aim ? 'Suelo estimado (plano)' : 'Buscando suelo';
+    stab.className = 'stab '+(direct?'ok':aim?'mid':'bad');
+    ret.className = 'arret'+(direct?'':aim?' mid':' bad');
+    const c=segScreen(PV,[O[0]+d[0],O[1]+d[1],O[2]+d[2]],[O[0]+d[0],O[1]+d[1],O[2]+d[2]],W,Hh);
+    if (c){ ret.style.left=c[0][0]+'px'; ret.style.top=c[0][1]+'px'; }
+
+    let seg=null, title='', val=null, form='';
+    AR.live=null;
+    const B=AR.B, th=Math.asin(Math.max(-1,Math.min(1,d[1])));
+    if (!B){
+      if (aim){ title='Distancia a ese punto'; val=Math.hypot(aim[0]-O[0],aim[2]-O[2]); form='Altura de la cámara sobre el suelo: '+fx(O[1]-aim[1],2)+' m'; }
+      hint(aim ? 'Apunta a donde inicia la raíz del árbol y toca el botón. Si te acercas al tronco es más preciso.' :
+           AR.yG==null ? 'Apunta al suelo cerca de ti y mueve el celular despacio hasta que lo detecte' : 'Baja la mira hacia el suelo, al pie del árbol');
+    } else {
+      const vx=B[0]-O[0], vz=B[2]-O[2], D=Math.hypot(vx,vz), hc=O[1]-B[1];
+      if (AR.tab==='alt'){
+        if (AR.H==null){
+          const h=hc+D*Math.tan(Math.min(th,1.5));
+          form='H = h + D × tan θ = '+fx(hc,2)+' + '+fx(D,2)+' × tan '+fx(th/R)+'°';
+          AR.live={h,D,form}; val=Math.max(h,0); title='Altura hasta la mira';
+          seg=[B,[B[0],B[1]+val,B[2]]];
+          hint(D<1.5 ? 'Estás muy cerca del tronco: camina hacia atrás hasta ver la punta' : 'Sube la mira hasta la punta más alta y toca el botón');
+        } else { seg=[B,[B[0],B[1]+AR.H,B[2]]]; title='Altura total'; val=AR.H; form=AR.Hform; hint('Altura lista. Pasa a Copa o toca Guardar.'); }
+      } else {
+        const dh=Math.hypot(d[0],d[2]), dot=vx*d[0]+vz*d[2];
+        if (dh>0.05 && D>0.3 && dot>0){
+          const k=dot/(dh*dh), delta=Math.acos(Math.max(-1,Math.min(1,dot/(D*dh)))), r=D*Math.sin(delta);
+          const E=[O[0]+d[0]*k, O[1]+d[1]*k, O[2]+d[2]*k];   // punto de la visual más cercano al eje del tronco
+          AR.live={r,D}; val=r; title='Radio de copa hasta la mira'; seg=[[B[0],E[1],B[2]],E];
+          form='r = D × sin Δ = '+fx(D,2)+' × sin '+fx(delta/R)+'°';
+        }
+        hint('Apunta al borde de la copa y toca el botón. Camina alrededor y marca más bordes para promediar.');
+      }
+    }
+
+    const L=$('arL'), A=$('arA'), Bm=$('arB'), Bs=$('arBase');
+    const ss = seg && segScreen(PV,seg[0],seg[1],W,Hh);
+    const show=(e,on)=>e.setAttribute('visibility', on?'visible':'hidden');
+    show(L,!!ss); show(A,!!ss); show(Bm,!!ss);
+    if (ss){
+      L.setAttribute('x1',ss[0][0]); L.setAttribute('y1',ss[0][1]); L.setAttribute('x2',ss[1][0]); L.setAttribute('y2',ss[1][1]);
+      A.setAttribute('cx',ss[0][0]); A.setAttribute('cy',ss[0][1]); Bm.setAttribute('cx',ss[1][0]); Bm.setAttribute('cy',ss[1][1]);
+    }
+    const bs = B && segScreen(PV,B,B,W,Hh);
+    show(Bs,!!bs); if (bs){ Bs.setAttribute('cx',bs[0][0]); Bs.setAttribute('cy',bs[0][1]); }
+
+    $('arLive').hidden = val==null;
+    if (val!=null){
+      $('arT').textContent=title; $('arM').textContent=fx(val,2)+' m'; $('arC').textContent=Math.round(val*100)+' cm'; $('arF').textContent=form;
+    }
+  }
+
+  $('arShot').addEventListener('click', () => {
+    const c=AR.cur;
+    if (!c) return arFlash('Espera a que la cámara reconozca el entorno.');
+    if (!AR.B){
+      if (!c.aim) return arFlash('Aún no detecto el suelo. Apunta al suelo y mueve el celular despacio.');
+      AR.B=c.aim.slice();
+    } else if (AR.tab==='alt'){
+      if (AR.H==null){
+        if (!(AR.live && AR.live.h>0.05)) return arFlash('Sube la mira por encima de la base.');
+        AR.H=AR.live.h; AR.D=AR.live.D; AR.Hform=AR.live.form+' = '+fx(AR.H,2)+' m';
+      } else arReset();
+    } else {
+      if (!(AR.live && AR.live.r!=null)) return arFlash('Apunta hacia el árbol, al borde de la copa.');
+      AR.edges.push(AR.live.r); if (AR.D==null) AR.D=AR.live.D;
+    }
+    AR.live=null; arUI();
+  });
+  $('arAlt').addEventListener('click', () => { AR.tab='alt'; arUI(); });
+  $('arCopa').addEventListener('click', () => { AR.tab='copa'; arUI(); });
+  $('arNew').addEventListener('click', () => { arReset(); arUI(); });
+  $('arExit').addEventListener('click', () => { if (AR.s) AR.s.end(); });
+  $('arSave').addEventListener('click', () => {
+    const r=arR();
+    if (AR.H==null && r==null) return arFlash('Todavía no hay altura ni copa medidas.');
+    lastHeight=AR.H; lastR=r; lastD=AR.D;
+    $('save').click();
+    arFlash($('mReg').textContent+' Toca Salir para ver los registros.');
+    arReset(); arUI();
   });
 
   calcH(); calcC(); renderTable(); updateHint(); showCal();
