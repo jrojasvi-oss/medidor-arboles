@@ -55,6 +55,14 @@
   .nube .fl.sub{color:var(--mute);font-size:15.5px}
   .nube.min{right:auto;padding:5px 11px}
   .nube.min .fb{display:none}
+  .ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 0 2px #000)}
+  .ov line{stroke:var(--accent);stroke-width:3;stroke-linecap:round}
+  .ov circle{fill:var(--accent);stroke:#16200f;stroke-width:2}
+  .live{position:absolute;left:50%;top:calc(50% + 52px);transform:translateX(-50%);text-align:center;white-space:nowrap;pointer-events:none;
+    background:rgba(13,20,16,.82);border:1.5px solid var(--accent);border-radius:12px;padding:5px 14px 7px;font-family:var(--num);font-variant-numeric:tabular-nums}
+  .live small{display:block;font-family:var(--txt);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+  .live b{font-size:38px;line-height:1;color:var(--accent)}
+  .live span{display:block;font-size:19px;color:var(--ink)}
   .hint{position:absolute;left:12px;right:12px;bottom:12px;text-align:center;font-weight:600;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,.6);text-shadow:0 1px 2px #000}
 
   /* Panel */
@@ -114,14 +122,15 @@
     <line x1="12" y1="100" x2="60" y2="108" stroke="#e9efe6" stroke-width="1.2" opacity=".6"/>
   </svg>
   <h1>Altura y copa<br><span>con la cámara</span></h1>
-  <p>Apunta la mira a la base y a la punta del árbol; la app lee la inclinación del celular y calcula la altura. Para la copa, apunta a los dos bordes y calcula el radio.</p>
-  <button class="btn primary" id="go" style="flex:0 0 auto">Activar cámara y sensores</button>
+  <p>Marca el primer punto donde inicia la raíz del árbol y sube la mira: una línea va mostrando la altura en metros y centímetros. Para la copa, marca el centro y gira hacia el borde para ampliar el radio.</p>
+  <button class="btn primary" id="go" style="flex:0 0 auto">Toca para empezar a medir</button>
   <p class="msg" id="startMsg"></p>
 </div>
 
 <div class="view">
   <video id="cam" playsinline muted autoplay></video>
   <div class="nocam" id="nocam">Sin cámara. Puedes medir igual: mira a lo largo del borde superior del celular.</div>
+  <svg class="ov" id="ov" hidden aria-hidden="true"><line id="ovL"/><circle id="ovA" r="7"/><circle id="ovB" r="5"/></svg>
   <div class="ring" id="ring"></div>
   <div class="reticle"></div>
   <div class="hud">
@@ -132,7 +141,8 @@
     <div class="ft"><span id="fT">Fórmula en uso</span><span id="fX">ƒ ▾</span></div>
     <div class="fb" id="fB"></div>
   </div>
-  <div class="hint" id="hint">Apunta la mira a la base del tronco</div>
+  <div class="live" id="live" hidden><small id="liveT"></small><b id="liveM"></b><span id="liveC"></span></div>
+  <div class="hint" id="hint">Apunta la mira a donde inicia la raíz del árbol</div>
 </div>
 
 <div class="sheet">
@@ -150,7 +160,7 @@
     </div>
     <label class="check"><input type="checkbox" id="useEye"> No tengo cinta: estimar la distancia con la altura de mis ojos</label>
     <div class="row">
-      <button class="btn" id="bBase"><span>1 · Marcar base</span><span class="v" id="vBase">—</span></button>
+      <button class="btn" id="bBase"><span>1 · Marcar base (raíz)</span><span class="v" id="vBase">—</span></button>
       <button class="btn" id="bTop"><span>2 · Marcar punta</span><span class="v" id="vTop">—</span></button>
     </div>
     <div class="result">
@@ -158,23 +168,33 @@
       <div class="kpi"><div class="lbl">Distancia usada</div><div class="n" id="rD">—<span class="u">m</span></div></div>
     </div>
     <p class="msg" id="mAlt">Párate a una distancia parecida a la altura del árbol, donde veas la punta y la base.</p>
+    <details>
+      <summary>Calibrar con una altura conocida</summary>
+      <p>Mide con cinta la distancia a algo cuya altura real conozcas (un poste, una pared). Marca su base y su punta, escribe la altura real y toca Calibrar. La app corrige la inclinación del sensor.</p>
+      <div class="row">
+        <div class="field"><label for="calH">Altura real (m)</label><input id="calH" type="number" inputmode="decimal" step="0.01"></div>
+        <button class="btn" id="calGo">Calibrar</button>
+        <button class="btn ghost" id="calReset">Quitar</button>
+      </div>
+      <p class="msg" id="mCal"></p>
+    </details>
   </section>
 
   <!-- COPA -->
   <section class="stack" id="p-copa" hidden>
-    <p class="msg">Desde la misma distancia al tronco, apunta al borde izquierdo y al derecho de la copa. Repite desde otra dirección a 90° para promediar.</p>
+    <p class="msg">Desde fuera de la copa, apunta al tronco y marca el centro. Luego gira hacia el borde de la copa: la línea se amplía y muestra el radio. Repite desde otra dirección a 90° para promediar.</p>
     <div class="row">
       <div class="field"><label for="distC">Distancia al tronco (m)</label><input id="distC" type="number" inputmode="decimal" step="0.1" value="15"></div>
     </div>
     <h3>Vista 1</h3>
     <div class="row">
-      <button class="btn" data-c="0L"><span>Borde izq.</span><span class="v">—</span></button>
-      <button class="btn" data-c="0R"><span>Borde der.</span><span class="v">—</span></button>
+      <button class="btn" data-c="0L"><span>1 · Centro (tronco)</span><span class="v">—</span></button>
+      <button class="btn" data-c="0R"><span>2 · Borde de copa</span><span class="v">—</span></button>
     </div>
     <h3>Vista 2 (a 90°)</h3>
     <div class="row">
-      <button class="btn" data-c="1L"><span>Borde izq.</span><span class="v">—</span></button>
-      <button class="btn" data-c="1R"><span>Borde der.</span><span class="v">—</span></button>
+      <button class="btn" data-c="1L"><span>1 · Centro (tronco)</span><span class="v">—</span></button>
+      <button class="btn" data-c="1R"><span>2 · Borde de copa</span><span class="v">—</span></button>
     </div>
     <div class="result">
       <div class="kpi"><div class="lbl">Radio medio</div><div class="n hl" id="rR">—<span class="u">m</span></div></div>
@@ -220,10 +240,10 @@
     <ol>
       <li><b>Altura:</b> <code>H = D × (tan θpunta − tan θbase)</code>. D es la distancia horizontal al tronco; θ son los ángulos que marcas. Funciona también en pendiente si D es horizontal.</li>
       <li><b>Sin cinta:</b> <code>D = h_ojos ÷ tan|θbase|</code>. Es menos preciso; úsalo solo en terreno plano.</li>
-      <li><b>Radio de copa:</b> <code>r = D × sin(Δ/2)</code>, donde Δ es el ángulo horizontal entre los dos bordes. Debes estar fuera de la copa.</li>
+      <li><b>Radio de copa:</b> <code>r = D × sin Δ</code>, donde Δ es el ángulo horizontal entre el tronco (centro) y el borde de la copa. Debes estar fuera de la copa.</li>
       <li>Sostén el celular con las dos manos y marca cuando el aro esté verde («Estable»).</li>
       <li>Lo ideal es D ≈ altura del árbol (ángulo a la punta entre 30° y 50°). Mide 2–3 veces y promedia.</li>
-      <li>El ángulo horizontal usa el giroscopio: no camines entre el borde izquierdo y el derecho, solo gira.</li>
+      <li>El ángulo horizontal usa el giroscopio: no camines entre el centro y el borde, solo gira.</li>
     </ol>
   </details>
 </div>
@@ -234,6 +254,9 @@
   const R = Math.PI / 180;
   const buf = [];
   let elev = null, head = null, spread = 99, haveSensor = false;
+  const CALKEY = 'hipsometro.cal.v1';
+  let cal = 0;   // corrección de inclinación en grados, obtenida al calibrar
+  try { cal = parseFloat(localStorage.getItem(CALKEY)) || 0; } catch(_){}
 
   // ---- Sensores: dirección a la que apunta la cámara trasera (eje -Z del equipo) ----
   function onOri(e){
@@ -249,7 +272,7 @@
       let x=0,y=0,z=0;
       for (const v of buf){ x+=v[0]; y+=v[1]; z+=v[2]; }
       const n=Math.hypot(x,y,z); x/=n; y/=n; z/=n;
-      elev = Math.asin(Math.max(-1,Math.min(1,z))) / R;
+      elev = Math.asin(Math.max(-1,Math.min(1,z))) / R + cal;
       head = Math.atan2(x,y) / R;
       let mx = 0;
       for (const v of buf){ const d=Math.acos(Math.max(-1,Math.min(1,v[0]*x+v[1]*y+v[2]*z)))/R; if(d>mx) mx=d; }
@@ -259,30 +282,44 @@
       if (spread < 0.4){ s.textContent='Estable'; s.className='stab ok'; $('ring').classList.remove('shaky'); }
       else if (spread < 1.2){ s.textContent='Casi'; s.className='stab mid'; $('ring').classList.remove('shaky'); }
       else { s.textContent='Moviéndose'; s.className='stab bad'; $('ring').classList.add('shaky'); }
+      drawLive();
     }
     requestAnimationFrame(tick);
   }
 
-  async function start(){
-    const msg = $('startMsg');
-    try {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-        const p = await DeviceOrientationEvent.requestPermission();
-        if (p !== 'granted') throw new Error('Permiso de movimiento denegado. En iPhone: Ajustes › Safari › Movimiento y orientación.');
-      }
-      window.addEventListener('deviceorientation', onOri, true);
-    } catch(err){ msg.textContent = err.message; msg.className='msg err'; return; }
-
-    try {
-      const st = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1280}}, audio:false});
-      $('cam').srcObject = st; $('nocam').hidden = true;
-    } catch(err){ $('nocam').hidden = false; }
-
-    try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch(_){}
+  // ---- Arranque: la pantalla de medición se abre de inmediato; cámara y sensores no la bloquean ----
+  let started = false, wantFull = false, sensorErr = '';
+  const listen = () => window.addEventListener('deviceorientation', onOri, true);
+  function sensorFail(t){ sensorErr = t; $('stab').textContent = 'Sin sensor'; updateHint(); }
+  function goFull(){
+    const el = document.documentElement, fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!fn || document.fullscreenElement || document.webkitFullscreenElement) return;
+    try { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); } catch(_){}
+  }
+  function start(){
+    if (started) return; started = true;
     $('start').hidden = true;
     requestAnimationFrame(tick);
-    setTimeout(() => { if (!haveSensor) { $('stab').textContent='Sin sensor'; $('hint').textContent='Este equipo no envía datos de inclinación. Abre la app en el celular por HTTPS.'; } }, 1500);
+    try {
+      const DOE = window.DeviceOrientationEvent;
+      if (DOE && typeof DOE.requestPermission === 'function'){
+        DOE.requestPermission()
+          .then(p => { if (p === 'granted') listen(); else sensorFail('Permiso de movimiento denegado. En iPhone: Ajustes › Safari › Movimiento y orientación.'); })
+          .catch(() => sensorFail('No se pudo pedir el permiso de movimiento. Abre el enlace en Safari.'));
+      } else listen();
+    } catch(_){ listen(); }
+    goFull();
+    const md = navigator.mediaDevices;
+    if (md && md.getUserMedia){
+      md.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1280}}, audio:false})
+        .then(st => { $('cam').srcObject = st; $('nocam').hidden = true; const p = $('cam').play(); if (p && p.catch) p.catch(() => {}); })
+        .catch(() => { $('nocam').hidden = false; })
+        .then(() => { wantFull = true; });   // el aviso de permiso saca de pantalla completa; se retoma en el siguiente toque
+    } else $('nocam').hidden = false;
+    try { if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(() => {}); } catch(_){}
+    setTimeout(() => { if (!haveSensor && !sensorErr) sensorFail('Este equipo no envía datos de inclinación. Abre la app en el celular, en Chrome o Safari.'); }, 2500);
   }
+  document.addEventListener('click', () => { if (started && wantFull){ wantFull = false; goFull(); } });
   $('go').addEventListener('click', start);
 
   // ---- Pestañas ----
@@ -362,7 +399,7 @@
         let d=Math.abs(((c.R - c.L + 540) % 360) - 180);
         const btns=document.querySelectorAll('[data-c^="'+i+'"]');
         btns[0].querySelector('.v').textContent = btns[1].querySelector('.v').textContent = 'Δ ' + d.toFixed(1)+'°';
-        const r = D ? D * Math.sin(d/2*R) : null;
+        const r = D ? D * Math.sin(Math.min(d,90)*R) : null;
         copaViews.push({i, d, r});
         if (D) radii.push(r);
       });
@@ -378,6 +415,65 @@
     setK('rR', lastR, 'm', 2); setK('rDc', lastR*2, 'm'); setK('rA', Math.PI*lastR*lastR, 'm²');
     renderFormula();
   }
+
+  // ---- Línea en vivo sobre lo que se mide. Es una guía visual: el valor sale de los ángulos, no de la imagen ----
+  const view = document.querySelector('.view');
+  function focalPx(){
+    const v=$('cam'), W=view.clientWidth, Hh=view.clientHeight;
+    const vw=v.videoWidth||W, vh=v.videoHeight||Hh, s=Math.max(W/vw, Hh/vh);
+    return Math.max(vw,vh)*s/2 / Math.tan(33*R);   // se asume ~66° de campo visual en el lado largo del video
+  }
+  const off = (deg,fp,lim) => Math.max(-lim, Math.min(lim, fp*Math.tan(Math.max(-80,Math.min(80,deg))*R)));
+  function drawLive(){
+    const W=view.clientWidth, Hh=view.clientHeight, cx=W/2, cy=Hh/2, fp=focalPx();
+    let pts=null, title='', val=null;
+    if (tab==='alt' && H.base!=null){
+      const D=currentD().d, yb=cy+off(elev-H.base,fp,Hh);
+      if (H.top==null){ pts=[cx,yb,cx,cy]; title='Altura hasta la mira'; val = D ? D*(Math.tan(elev*R)-Math.tan(H.base*R)) : null; }
+      else { pts=[cx,yb,cx,cy+off(elev-H.top,fp,Hh)]; title='Altura total'; val=lastHeight; }
+    } else if (tab==='copa'){
+      const c=C.find(c => c.L!=null && c.R==null), D=num('distC');
+      if (c){
+        const dl=((head-c.L+540)%360)-180;
+        pts=[cx-off(dl,fp,W),cy,cx,cy]; title='Radio de copa hasta la mira';
+        val = D ? D*Math.sin(Math.min(Math.abs(dl),90)*R) : null;
+      }
+    }
+    $('ov').hidden = $('live').hidden = !pts;
+    if (!pts) return;
+    const l=$('ovL'), A=$('ovA'), B=$('ovB');
+    l.setAttribute('x1',pts[0]); l.setAttribute('y1',pts[1]); l.setAttribute('x2',pts[2]); l.setAttribute('y2',pts[3]);
+    A.setAttribute('cx',pts[0]); A.setAttribute('cy',pts[1]); B.setAttribute('cx',pts[2]); B.setAttribute('cy',pts[3]);
+    if (val!=null && val<0) val=0;
+    $('liveT').textContent = title;
+    $('liveM').textContent = fx(val,2)+' m';
+    $('liveC').textContent = val==null ? 'falta la distancia' : Math.round(val*100)+' cm';
+  }
+
+  // ---- Calibración: busca la corrección de inclinación que hace coincidir la medición con una altura conocida ----
+  function showCal(t,err){
+    const m=$('mCal');
+    m.textContent = t || (cal ? 'Corrección activa: '+(cal>0?'+':'')+fx(cal,2)+'° en la inclinación.' : 'Sin calibración.');
+    m.className = 'msg'+(err?' err':'');
+  }
+  function setCal(n){
+    const dl=n-cal; cal=n;
+    try { localStorage.setItem(CALKEY, String(cal)); } catch(_){}
+    if (H.base!=null){ H.base+=dl; $('vBase').textContent=f(H.base)+'°'; }
+    if (H.top!=null){ H.top+=dl; $('vTop').textContent=f(H.top)+'°'; }
+    calcH(); showCal();
+  }
+  $('calGo').addEventListener('click', () => {
+    const real=num('calH'), D=num('dist');
+    if ($('useEye').checked) return showCal('Para calibrar, mide la distancia con cinta y desmarca «No tengo cinta».', true);
+    if (H.base==null || H.top==null || !D || !real || real<=0) return showCal('Primero marca la base y la punta del objeto, y escribe la distancia y su altura real.', true);
+    const g = x => D*(Math.tan((H.top+x)*R) - Math.tan((H.base+x)*R)) - real;
+    let lo=-6, hi=6;
+    if (g(lo)*g(hi) > 0) return showCal('No se pudo calibrar: la diferencia es demasiado grande para venir del sensor. Revisa la distancia y la altura real, y mide desde más cerca (punta a más de 30°).', true);
+    for (let i=0;i<40;i++){ const mid=(lo+hi)/2; if (g(lo)*g(mid) <= 0) hi=mid; else lo=mid; }
+    setCal(cal + (lo+hi)/2);
+  });
+  $('calReset').addEventListener('click', () => setCal(0));
 
   // ---- Nube de fórmula: muestra en todo momento qué fórmula se está usando y con qué valores ----
   let copaViews=[], copaManual=false;
@@ -395,18 +491,18 @@
       L.push(['H = D × (tan θpunta − tan θbase)', false]);
       if (lastHeight!=null) L.push(['H = '+fx(D.d)+' × (tan '+ang(H.top)+' − tan '+ang(H.base)+') = '+fx(lastHeight)+' m', true]);
       else if (H.base==null) L.push(['Esperando θbase: apunta a la base del tronco', true]);
-      else L.push(['θbase = '+ang(H.base)+' · esperando θpunta', true]);
+      else L.push(['θbase = '+ang(H.base)+' · midiendo en vivo, falta marcar θpunta', true]);
     } else if (tab==='copa'){
       if (copaManual){
         title='Copa · medición con cinta';
         L.push(['r = (dN–S + dE–O) ÷ 4', false]);
         L.push(['r = ('+fx(num('dNS'))+' + '+fx(num('dEO'))+') ÷ 4 = '+fx(lastR,2)+' m', true]);
       } else {
-        title='Copa · ángulo entre bordes';
-        L.push(['r = D × sin(Δ/2)', false]);
-        copaViews.forEach(v => L.push(['r'+(v.i?'₂':'₁')+' = '+fx(num('distC'))+' × sin('+fx(v.d)+'°/2) = '+fx(v.r,2)+' m', true]));
+        title='Copa · ángulo del centro al borde';
+        L.push(['r = D × sin Δ', false]);
+        copaViews.forEach(v => L.push(['r'+(v.i?'₂':'₁')+' = '+fx(num('distC'))+' × sin '+fx(v.d)+'° = '+fx(v.r,2)+' m', true]));
         if (copaViews.length===2) L.push(['r̄ = (r₁ + r₂) ÷ 2 = '+fx(lastR,2)+' m', true]);
-        if (!copaViews.length) L.push(['Esperando bordes izquierdo y derecho', true]);
+        if (!copaViews.length) L.push(['Esperando centro (tronco) y borde de copa', true]);
       }
       if (lastR!=null) L.push(['A = π × r̄² = π × '+fx(lastR,2)+'² = '+fx(Math.PI*lastR*lastR)+' m²', true]);
     } else {
@@ -420,13 +516,14 @@
   $('nube').addEventListener('click', () => { const n=$('nube'); n.classList.toggle('min'); $('fX').textContent = n.classList.contains('min') ? 'ƒ ▸' : 'ƒ ▾'; });
 
   function updateHint(){
+    if (sensorErr && !haveSensor){ $('hint').textContent=sensorErr; return; }
     let t='';
-    if (tab==='alt') t = H.base==null ? 'Apunta la mira a la base del tronco y toca «Marcar base»' :
-                         H.top==null ? 'Ahora apunta a la punta más alta y toca «Marcar punta»' : 'Listo. Guarda en Registros o vuelve a marcar';
+    if (tab==='alt') t = H.base==null ? 'Apunta la mira a donde inicia la raíz y toca «Marcar base»' :
+                         H.top==null ? 'Sube la mira hasta la punta más alta y toca «Marcar punta»' : 'Listo. Guarda en Registros o vuelve a marcar';
     else if (tab==='copa'){
-      const k = C[0].L==null?'el borde izquierdo (vista 1)': C[0].R==null?'el borde derecho (vista 1)':
-                C[1].L==null?'el borde izquierdo (vista 2)': C[1].R==null?'el borde derecho (vista 2)':null;
-      t = k ? 'Gira sin caminar y apunta a ' + k : 'Copa medida. Guarda en Registros';
+      const k = C[0].L==null?'Apunta al tronco y marca el centro (vista 1)': C[0].R==null?'Gira sin caminar hasta el borde de la copa y márcalo (vista 1)':
+                C[1].L==null?'Camina a 90°, apunta al tronco y marca el centro (vista 2)': C[1].R==null?'Gira sin caminar hasta el borde de la copa y márcalo (vista 2)':null;
+      t = k || 'Copa medida. Guarda en Registros';
     } else t='Revisa y exporta tus mediciones';
     $('hint').textContent=t;
   }
@@ -487,7 +584,7 @@
     rows=[]; persist(); renderTable(); armed=false; $('clear').textContent='Borrar todo';
   });
 
-  calcH(); calcC(); renderTable(); updateHint();
+  calcH(); calcC(); renderTable(); updateHint(); showCal();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
