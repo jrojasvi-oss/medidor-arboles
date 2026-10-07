@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0d1410">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Hipsómetro de Bolsillo</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0d1410; --panel:#141d17; --panel2:#1b261f; --line:#2b3a30;
+    --ink:#e9efe6; --mute:#93a596; --accent:#d8f05a; --bark:#c9935a;
+    --ok:#7fd88f; --warn:#f2b84b; --bad:#ff7a6b;
+    --num:"Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --txt:"Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--txt);font-size:15px;-webkit-tap-highlight-color:transparent}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  [hidden]{display:none!important}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* Visor */
+  .view{position:relative;flex:1 1 auto;min-height:38vh;background:#000;overflow:hidden}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .nocam{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--mute);
+    background:repeating-linear-gradient(0deg,transparent 0 39px,#1a241d 39px 40px),repeating-linear-gradient(90deg,transparent 0 39px,#1a241d 39px 40px),#0a0f0c}
+  .reticle{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+  .reticle::before,.reticle::after{content:"";position:absolute;background:var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+  .reticle::before{width:2px;height:64px;left:-1px;top:-32px}
+  .reticle::after{height:2px;width:64px;top:-1px;left:-32px}
+  .ring{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border:2px solid var(--accent);border-radius:50%;opacity:.55;pointer-events:none;transition:border-color .2s}
+  .ring.shaky{border-color:var(--bad)}
+  .hud{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    background:linear-gradient(rgba(0,0,0,.65),transparent);pointer-events:none}
+  .ang{font-family:var(--num);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent);text-shadow:0 1px 3px #000}
+  .ang small{font-size:16px;color:var(--ink);font-weight:500;display:block;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+  .stab{font-family:var(--num);font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.55);border:1px solid var(--line)}
+  .stab.ok{color:var(--ok)} .stab.mid{color:var(--warn)} .stab.bad{color:var(--bad)}
+  .nube{position:absolute;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 74px);max-width:440px;margin-inline:auto;
+    background:rgba(13,20,16,.88);border:1.5px solid var(--accent);border-radius:18px;padding:8px 12px 9px;cursor:pointer;
+    box-shadow:0 4px 18px rgba(0,0,0,.45)}
+  .nube::after{content:"";position:absolute;left:28px;bottom:-9px;width:14px;height:14px;background:rgba(13,20,16,.95);
+    border-right:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);transform:rotate(45deg)}
+  .nube .ft{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;display:flex;justify-content:space-between;gap:8px}
+  .nube .fl{font-family:var(--num);font-size:17px;line-height:1.25;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .nube .fl.sub{color:var(--mute);font-size:15.5px}
+  .nube.min{right:auto;padding:5px 11px}
+  .nube.min .fb{display:none}
+  .hint{position:absolute;left:12px;right:12px;bottom:12px;text-align:center;font-weight:600;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,.6);text-shadow:0 1px 2px #000}
+
+  /* Panel */
+  .sheet{flex:0 0 auto;max-height:50vh;overflow-y:auto;background:var(--panel);border-top:1px solid var(--line);padding:0 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+  .tabs{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 0;background:var(--panel)}
+  .tab{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:9px 4px;font-weight:600;color:var(--mute)}
+  .tab[aria-selected="true"]{background:var(--accent);color:#16200f;border-color:var(--accent)}
+  .stack{display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1 1 120px;min-width:0}
+  label,.lbl{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+  input[type=number],input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 11px;font-size:17px;font-variant-numeric:tabular-nums}
+  .check{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0}
+  .check input{width:20px;height:20px;accent-color:var(--accent)}
+  .btn{border:1px solid var(--line);background:var(--panel2);border-radius:11px;padding:13px 12px;font-weight:600;flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .btn .v{font-family:var(--num);font-size:20px;font-variant-numeric:tabular-nums;color:var(--mute)}
+  .btn.done{border-color:var(--accent)} .btn.done .v{color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#16200f;border-color:var(--accent)}
+  .btn.ghost{background:transparent}
+  .btn:active{transform:scale(.98)}
+  .result{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+  .kpi{background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+  .kpi .n{font-family:var(--num);font-weight:700;font-size:32px;line-height:1.05;font-variant-numeric:tabular-nums}
+  .kpi .n.hl{color:var(--accent)}
+  .kpi .u{font-size:13px;color:var(--mute);margin-left:2px;font-family:var(--txt);font-weight:500}
+  .msg{font-size:13.5px;line-height:1.45;color:var(--mute)}
+  .msg.err{color:var(--bad)}
+  h3{margin:6px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--bark)}
+  details{border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel2)}
+  summary{font-weight:600;cursor:pointer}
+  details p,details li{font-size:13.5px;line-height:1.5;color:var(--mute)}
+  details ol{padding-left:18px;margin:8px 0}
+  code{font-family:var(--num);font-size:15px;color:var(--ink)}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);font-weight:600}
+  .del{background:none;border:0;color:var(--bad);padding:2px 6px}
+
+  .start{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:18px;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 24px)}
+  .start h1{font-family:var(--num);font-weight:700;font-size:44px;line-height:.95;margin:0;text-wrap:balance}
+  .start h1 span{color:var(--accent)}
+  .start p{color:var(--mute);line-height:1.5;margin:0;max-width:34em}
+  .tree{width:120px;height:auto}
+</style>
+</head>
+<body>
+
+<div class="start" id="start">
+  <svg class="tree" viewBox="0 0 120 120" aria-hidden="true">
+    <ellipse cx="60" cy="42" rx="38" ry="30" fill="none" stroke="#d8f05a" stroke-width="3"/>
+    <line x1="60" y1="68" x2="60" y2="108" stroke="#c9935a" stroke-width="5"/>
+    <line x1="22" y1="42" x2="98" y2="42" stroke="#d8f05a" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <line x1="8" y1="108" x2="112" y2="108" stroke="#93a596" stroke-width="2"/>
+    <line x1="12" y1="100" x2="60" y2="12" stroke="#e9efe6" stroke-width="1.2" opacity=".6"/>
+    <line x1="12" y1="100" x2="60" y2="108" stroke="#e9efe6" stroke-width="1.2" opacity=".6"/>
+  </svg>
+  <h1>Altura y copa<br><span>con la cámara</span></h1>
+  <p>Apunta la mira a la base y a la punta del árbol; la app lee la inclinación del celular y calcula la altura. Para la copa, apunta a los dos bordes y calcula el radio.</p>
+  <button class="btn primary" id="go" style="flex:0 0 auto">Activar cámara y sensores</button>
+  <p class="msg" id="startMsg"></p>
+</div>
+
+<div class="view">
+  <video id="cam" playsinline muted autoplay></video>
+  <div class="nocam" id="nocam">Sin cámara. Puedes medir igual: mira a lo largo del borde superior del celular.</div>
+  <div class="ring" id="ring"></div>
+  <div class="reticle"></div>
+  <div class="hud">
+    <div class="ang"><small>Inclinación</small><span id="elv">--.-°</span></div>
+    <div class="stab" id="stab">Sin sensor</div>
+  </div>
+  <div class="nube" id="nube" role="status" aria-live="polite" title="Toca para ocultar o mostrar">
+    <div class="ft"><span id="fT">Fórmula en uso</span><span id="fX">ƒ ▾</span></div>
+    <div class="fb" id="fB"></div>
+  </div>
+  <div class="hint" id="hint">Apunta la mira a la base del tronco</div>
+</div>
+
+<div class="sheet">
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="alt">Altura</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="copa">Copa</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="reg">Registros</button>
+  </div>
+
+  <!-- ALTURA -->
+  <section class="stack" id="p-alt">
+    <div class="row">
+      <div class="field"><label for="dist">Distancia al tronco (m)</label><input id="dist" type="number" inputmode="decimal" step="0.1" value="15"></div>
+      <div class="field"><label for="eye">Altura de tus ojos (m)</label><input id="eye" type="number" inputmode="decimal" step="0.01" value="1.60"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="useEye"> No tengo cinta: estimar la distancia con la altura de mis ojos</label>
+    <div class="row">
+      <button class="btn" id="bBase"><span>1 · Marcar base</span><span class="v" id="vBase">—</span></button>
+      <button class="btn" id="bTop"><span>2 · Marcar punta</span><span class="v" id="vTop">—</span></button>
+    </div>
+    <div class="result">
+      <div class="kpi"><div class="lbl">Altura total</div><div class="n hl" id="rH">—<span class="u">m</span></div></div>
+      <div class="kpi"><div class="lbl">Distancia usada</div><div class="n" id="rD">—<span class="u">m</span></div></div>
+    </div>
+    <p class="msg" id="mAlt">Párate a una distancia parecida a la altura del árbol, donde veas la punta y la base.</p>
+  </section>
+
+  <!-- COPA -->
+  <section class="stack" id="p-copa" hidden>
+    <p class="msg">Desde la misma distancia al tronco, apunta al borde izquierdo y al derecho de la copa. Repite desde otra dirección a 90° para promediar.</p>
+    <div class="row">
+      <div class="field"><label for="distC">Distancia al tronco (m)</label><input id="distC" type="number" inputmode="decimal" step="0.1" value="15"></div>
+    </div>
+    <h3>Vista 1</h3>
+    <div class="row">
+      <button class="btn" data-c="0L"><span>Borde izq.</span><span class="v">—</span></button>
+      <button class="btn" data-c="0R"><span>Borde der.</span><span class="v">—</span></button>
+    </div>
+    <h3>Vista 2 (a 90°)</h3>
+    <div class="row">
+      <button class="btn" data-c="1L"><span>Borde izq.</span><span class="v">—</span></button>
+      <button class="btn" data-c="1R"><span>Borde der.</span><span class="v">—</span></button>
+    </div>
+    <div class="result">
+      <div class="kpi"><div class="lbl">Radio medio</div><div class="n hl" id="rR">—<span class="u">m</span></div></div>
+      <div class="kpi"><div class="lbl">Diámetro</div><div class="n" id="rDc">—<span class="u">m</span></div></div>
+      <div class="kpi"><div class="lbl">Área copa</div><div class="n" id="rA">—<span class="u">m²</span></div></div>
+    </div>
+    <p class="msg" id="mCopa"></p>
+    <details>
+      <summary>Medir con cinta en vez de cámara</summary>
+      <p>Mide la proyección de la copa en el suelo en dos direcciones perpendiculares (N–S y E–O).</p>
+      <div class="row">
+        <div class="field"><label for="dNS">Diámetro N–S (m)</label><input id="dNS" type="number" inputmode="decimal" step="0.1"></div>
+        <div class="field"><label for="dEO">Diámetro E–O (m)</label><input id="dEO" type="number" inputmode="decimal" step="0.1"></div>
+      </div>
+    </details>
+  </section>
+
+  <!-- REGISTROS -->
+  <section class="stack" id="p-reg" hidden>
+    <div class="row">
+      <div class="field"><label for="tid">Código del árbol</label><input id="tid" type="text" value="A-01"></div>
+      <div class="field"><label for="sp">Especie / nota</label><input id="sp" type="text" placeholder="Opcional"></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="save">Guardar árbol actual</button>
+    </div>
+    <p class="msg" id="mReg"></p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Árbol</th><th>Altura m</th><th>Radio m</th><th>Área m²</th><th>D m</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="row">
+      <button class="btn" id="csv">Descargar CSV</button>
+      <button class="btn" id="share">Compartir</button>
+      <button class="btn ghost" id="clear">Borrar todo</button>
+    </div>
+  </section>
+
+  <details style="margin-top:14px">
+    <summary>Cómo funciona y consejos</summary>
+    <ol>
+      <li><b>Altura:</b> <code>H = D × (tan θpunta − tan θbase)</code>. D es la distancia horizontal al tronco; θ son los ángulos que marcas. Funciona también en pendiente si D es horizontal.</li>
+      <li><b>Sin cinta:</b> <code>D = h_ojos ÷ tan|θbase|</code>. Es menos preciso; úsalo solo en terreno plano.</li>
+      <li><b>Radio de copa:</b> <code>r = D × sin(Δ/2)</code>, donde Δ es el ángulo horizontal entre los dos bordes. Debes estar fuera de la copa.</li>
+      <li>Sostén el celular con las dos manos y marca cuando el aro esté verde («Estable»).</li>
+      <li>Lo ideal es D ≈ altura del árbol (ángulo a la punta entre 30° y 50°). Mide 2–3 veces y promedia.</li>
+      <li>El ángulo horizontal usa el giroscopio: no camines entre el borde izquierdo y el derecho, solo gira.</li>
+    </ol>
+  </details>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const R = Math.PI / 180;
+  const buf = [];
+  let elev = null, head = null, spread = 99, haveSensor = false;
+
+  // ---- Sensores: dirección a la que apunta la cámara trasera (eje -Z del equipo) ----
+  function onOri(e){
+    if (e.beta == null) return;
+    const a=(e.alpha||0)*R, b=e.beta*R, g=(e.gamma||0)*R;
+    const cX=Math.cos(b), sX=Math.sin(b), cY=Math.cos(g), sY=Math.sin(g), cZ=Math.cos(a), sZ=Math.sin(a);
+    buf.push([-(cZ*sY + sZ*sX*cY), -(sZ*sY - cZ*sX*cY), -(cX*cY)]);
+    if (buf.length > 14) buf.shift();
+    haveSensor = true;
+  }
+  function tick(){
+    if (buf.length){
+      let x=0,y=0,z=0;
+      for (const v of buf){ x+=v[0]; y+=v[1]; z+=v[2]; }
+      const n=Math.hypot(x,y,z); x/=n; y/=n; z/=n;
+      elev = Math.asin(Math.max(-1,Math.min(1,z))) / R;
+      head = Math.atan2(x,y) / R;
+      let mx = 0;
+      for (const v of buf){ const d=Math.acos(Math.max(-1,Math.min(1,v[0]*x+v[1]*y+v[2]*z)))/R; if(d>mx) mx=d; }
+      spread = mx;
+      $('elv').textContent = (elev>=0?'+':'') + elev.toFixed(1) + '°';
+      const s=$('stab');
+      if (spread < 0.4){ s.textContent='Estable'; s.className='stab ok'; $('ring').classList.remove('shaky'); }
+      else if (spread < 1.2){ s.textContent='Casi'; s.className='stab mid'; $('ring').classList.remove('shaky'); }
+      else { s.textContent='Moviéndose'; s.className='stab bad'; $('ring').classList.add('shaky'); }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  async function start(){
+    const msg = $('startMsg');
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p !== 'granted') throw new Error('Permiso de movimiento denegado. En iPhone: Ajustes › Safari › Movimiento y orientación.');
+      }
+      window.addEventListener('deviceorientation', onOri, true);
+    } catch(err){ msg.textContent = err.message; msg.className='msg err'; return; }
+
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1280}}, audio:false});
+      $('cam').srcObject = st; $('nocam').hidden = true;
+    } catch(err){ $('nocam').hidden = false; }
+
+    try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch(_){}
+    $('start').hidden = true;
+    requestAnimationFrame(tick);
+    setTimeout(() => { if (!haveSensor) { $('stab').textContent='Sin sensor'; $('hint').textContent='Este equipo no envía datos de inclinación. Abre la app en el celular por HTTPS.'; } }, 1500);
+  }
+  $('go').addEventListener('click', start);
+
+  // ---- Pestañas ----
+  let tab='alt';
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    tab = t.dataset.tab;
+    document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x===t));
+    ['alt','copa','reg'].forEach(k => $('p-'+k).hidden = k!==tab);
+    updateHint(); renderFormula(); if (tab==='reg') renderTable();
+  }));
+
+  const num = id => { const v=parseFloat(String($(id).value).replace(',','.')); return isFinite(v)?v:null; };
+  const f = (v,d=1) => v==null||!isFinite(v) ? '—' : v.toFixed(d);
+  const setK = (id,v,u,d=1) => $(id).innerHTML = f(v,d)+'<span class="u">'+u+'</span>';
+  function grab(){
+    if (elev==null){ flash('Activa los sensores primero.'); return null; }
+    if (spread > 1.2) flash('Marcado con el celular en movimiento; repite si dudas.');
+    return {e:elev, h:head};
+  }
+  function flash(t){ $('hint').textContent=t; clearTimeout(flash.t); flash.t=setTimeout(updateHint,2200); }
+
+  // ---- Altura ----
+  const H = {base:null, top:null};
+  let lastHeight=null, lastD=null;
+  $('bBase').addEventListener('click', () => { const g=grab(); if(!g) return; H.base=g.e; $('vBase').textContent=f(g.e)+'°'; $('bBase').classList.add('done'); calcH(); updateHint(); });
+  $('bTop').addEventListener('click', () => { const g=grab(); if(!g) return; H.top=g.e; $('vTop').textContent=f(g.e)+'°'; $('bTop').classList.add('done'); calcH(); updateHint(); });
+  ['dist','eye','useEye'].forEach(id => $(id).addEventListener('input', calcH));
+
+  function currentD(){
+    if ($('useEye').checked){
+      const h=num('eye');
+      if (H.base==null || h==null) return {d:null, why:'Marca la base para estimar la distancia.'};
+      if (H.base > -2) return {d:null, why:'La base debe quedar al menos 2° por debajo del horizonte. Acércate o revisa la altura de tus ojos.'};
+      return {d: h / Math.tan(-H.base*R), est:true};
+    }
+    const d=num('dist');
+    return d && d>0 ? {d} : {d:null, why:'Escribe la distancia horizontal al tronco.'};
+  }
+  function calcH(){
+    $('dist').disabled = $('useEye').checked;
+    const m=$('mAlt'); m.className='msg';
+    const D=currentD();
+    lastD = D.d; setK('rD', D.d, D.est?'m (est.)':'m');
+    if (D.d && $('useEye').checked){ $('distC').value = D.d.toFixed(1); calcC(); }
+    if (H.base==null || H.top==null){ setK('rH',null,'m'); lastHeight=null; if(D.why) m.textContent=D.why; renderFormula(); return; }
+    if (H.top <= H.base){ m.textContent='La punta debe estar por encima de la base. Vuelve a marcar.'; m.className='msg err'; setK('rH',null,'m'); lastHeight=null; renderFormula(); return; }
+    if (!D.d){ m.textContent=D.why; m.className='msg err'; setK('rH',null,'m'); lastHeight=null; renderFormula(); return; }
+    lastHeight = D.d * (Math.tan(H.top*R) - Math.tan(H.base*R));
+    setK('rH', lastHeight, 'm');
+    const ang = H.top;
+    m.textContent = ang > 60 ? 'Ángulo a la punta muy alto: aléjate para mejorar la precisión.' :
+                    ang < 20 ? 'Ángulo a la punta bajo: acércate un poco si puedes.' :
+                    'Buena geometría. Repite la medición para confirmar.';
+    renderFormula();
+  }
+  $('dist').addEventListener('change', () => { if(!$('useEye').checked){ $('distC').value=$('dist').value; calcC(); } });
+
+  // ---- Copa ----
+  const C = [{L:null,R:null},{L:null,R:null}];
+  let lastR=null;
+  document.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
+    const g=grab(); if(!g) return;
+    const i=+b.dataset.c[0], s=b.dataset.c[1];
+    C[i][s]=g.h; b.classList.add('done'); b.querySelector('.v').textContent='✓'; calcC(); updateHint();
+  }));
+  ['distC','dNS','dEO'].forEach(id => $(id).addEventListener('input', calcC));
+  function calcC(){
+    const m=$('mCopa'); m.className='msg'; m.textContent='';
+    const ns=num('dNS'), eo=num('dEO');
+    let radii=[];
+    copaViews=[]; copaManual=!!(ns && eo);
+    if (ns && eo){ radii=[ns/2, eo/2]; m.textContent='Usando las medidas con cinta.'; }
+    else {
+      const D=num('distC');
+      C.forEach((c,i) => {
+        if (c.L==null || c.R==null) return;
+        let d=Math.abs(((c.R - c.L + 540) % 360) - 180);
+        const btns=document.querySelectorAll('[data-c^="'+i+'"]');
+        btns[0].querySelector('.v').textContent = btns[1].querySelector('.v').textContent = 'Δ ' + d.toFixed(1)+'°';
+        const r = D ? D * Math.sin(d/2*R) : null;
+        copaViews.push({i, d, r});
+        if (D) radii.push(r);
+      });
+      if (!D) m.textContent='Escribe la distancia al tronco.';
+      else if (radii.length===1) m.textContent='Mide la vista 2, a 90° de la primera, para promediar.';
+      else if (radii.length===2){
+        const dif=Math.abs(radii[0]-radii[1])/((radii[0]+radii[1])/2);
+        m.textContent = dif>0.35 ? 'Las dos vistas difieren más de 35%: la copa es irregular o hubo un error; repite.' : 'Radio promedio de las dos vistas.';
+      }
+    }
+    if (!radii.length){ lastR=null; setK('rR',null,'m'); setK('rDc',null,'m'); setK('rA',null,'m²'); renderFormula(); return; }
+    lastR = radii.reduce((a,b)=>a+b,0)/radii.length;
+    setK('rR', lastR, 'm', 2); setK('rDc', lastR*2, 'm'); setK('rA', Math.PI*lastR*lastR, 'm²');
+    renderFormula();
+  }
+
+  // ---- Nube de fórmula: muestra en todo momento qué fórmula se está usando y con qué valores ----
+  let copaViews=[], copaManual=false;
+  const fx = (v,d=1) => v==null||!isFinite(v) ? '?' : v.toFixed(d).replace('.',',');
+  const ang = v => v==null ? 'θ?' : fx(v)+'°';
+  function renderFormula(){
+    let title='', L=[];   // L: [texto, esSustitución]
+    if (tab==='alt'){
+      const eye=$('useEye').checked, D=currentD();
+      title = eye ? 'Altura · método altura de ojos' : 'Altura · método trigonométrico';
+      if (eye){
+        L.push(['D = h ÷ tan|θbase|', false]);
+        if (D.d) L.push(['D = '+fx(num('eye'),2)+' ÷ tan '+fx(-H.base)+'° = '+fx(D.d)+' m', true]);
+      }
+      L.push(['H = D × (tan θpunta − tan θbase)', false]);
+      if (lastHeight!=null) L.push(['H = '+fx(D.d)+' × (tan '+ang(H.top)+' − tan '+ang(H.base)+') = '+fx(lastHeight)+' m', true]);
+      else if (H.base==null) L.push(['Esperando θbase: apunta a la base del tronco', true]);
+      else L.push(['θbase = '+ang(H.base)+' · esperando θpunta', true]);
+    } else if (tab==='copa'){
+      if (copaManual){
+        title='Copa · medición con cinta';
+        L.push(['r = (dN–S + dE–O) ÷ 4', false]);
+        L.push(['r = ('+fx(num('dNS'))+' + '+fx(num('dEO'))+') ÷ 4 = '+fx(lastR,2)+' m', true]);
+      } else {
+        title='Copa · ángulo entre bordes';
+        L.push(['r = D × sin(Δ/2)', false]);
+        copaViews.forEach(v => L.push(['r'+(v.i?'₂':'₁')+' = '+fx(num('distC'))+' × sin('+fx(v.d)+'°/2) = '+fx(v.r,2)+' m', true]));
+        if (copaViews.length===2) L.push(['r̄ = (r₁ + r₂) ÷ 2 = '+fx(lastR,2)+' m', true]);
+        if (!copaViews.length) L.push(['Esperando bordes izquierdo y derecho', true]);
+      }
+      if (lastR!=null) L.push(['A = π × r̄² = π × '+fx(lastR,2)+'² = '+fx(Math.PI*lastR*lastR)+' m²', true]);
+    } else {
+      title='Registros · valores guardados';
+      L.push(['Diámetro copa = 2r   ·   Área copa = π r²', false]);
+      L.push(['Altura: H = D × (tan θpunta − tan θbase)', true]);
+    }
+    $('fT').textContent = title;
+    $('fB').innerHTML = L.map(([t,s]) => '<div class="fl'+(s?' sub':'')+'">'+esc(t)+'</div>').join('');
+  }
+  $('nube').addEventListener('click', () => { const n=$('nube'); n.classList.toggle('min'); $('fX').textContent = n.classList.contains('min') ? 'ƒ ▸' : 'ƒ ▾'; });
+
+  function updateHint(){
+    let t='';
+    if (tab==='alt') t = H.base==null ? 'Apunta la mira a la base del tronco y toca «Marcar base»' :
+                         H.top==null ? 'Ahora apunta a la punta más alta y toca «Marcar punta»' : 'Listo. Guarda en Registros o vuelve a marcar';
+    else if (tab==='copa'){
+      const k = C[0].L==null?'el borde izquierdo (vista 1)': C[0].R==null?'el borde derecho (vista 1)':
+                C[1].L==null?'el borde izquierdo (vista 2)': C[1].R==null?'el borde derecho (vista 2)':null;
+      t = k ? 'Gira sin caminar y apunta a ' + k : 'Copa medida. Guarda en Registros';
+    } else t='Revisa y exporta tus mediciones';
+    $('hint').textContent=t;
+  }
+
+  // ---- Registros ----
+  const KEY='hipsometro.registros.v1';
+  let rows=[];
+  try { rows = JSON.parse(localStorage.getItem(KEY)||'[]'); } catch(_){ rows=[]; }
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch(_){} };
+
+  function renderTable(){
+    const tb=$('tbody'); tb.innerHTML='';
+    if (!rows.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:left;color:var(--mute)">Aún no hay árboles guardados.</td></tr>'; return; }
+    rows.forEach((r,i) => {
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td>'+esc(r.id)+(r.sp?'<br><small style="color:var(--mute)">'+esc(r.sp)+'</small>':'')+'</td><td>'+f(r.h)+'</td><td>'+f(r.r,2)+'</td><td>'+f(r.a)+'</td><td>'+f(r.d)+'</td>';
+      const td=document.createElement('td'); const b=document.createElement('button'); b.className='del'; b.textContent='✕'; b.setAttribute('aria-label','Borrar '+r.id);
+      b.onclick=()=>{ rows.splice(i,1); persist(); renderTable(); }; td.appendChild(b); tr.appendChild(td); tb.appendChild(tr);
+    });
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  $('save').addEventListener('click', () => {
+    const m=$('mReg');
+    if (lastHeight==null && lastR==null){ m.textContent='No hay altura ni copa medidas todavía.'; m.className='msg err'; return; }
+    const id=$('tid').value.trim()||('A-'+(rows.length+1));
+    rows.push({id, sp:$('sp').value.trim(), h:lastHeight, r:lastR, a:lastR!=null?Math.PI*lastR*lastR:null, d:lastD,
+               tb:H.base, tt:H.top, fecha:new Date().toISOString()});
+    persist(); renderTable();
+    m.textContent='Guardado ' + id + '.'; m.className='msg';
+    const mm=id.match(/^(.*?)(\d+)$/); $('tid').value = mm ? mm[1] + String(+mm[2]+1).padStart(mm[2].length,'0') : id+'-2';
+    $('sp').value='';
+    H.base=H.top=null; lastHeight=null; ['bBase','bTop'].forEach(b=>$(b).classList.remove('done')); $('vBase').textContent=$('vTop').textContent='—';
+    C.forEach(c=>{c.L=c.R=null;}); document.querySelectorAll('[data-c]').forEach(b=>{b.classList.remove('done'); b.querySelector('.v').textContent='—';});
+    $('dNS').value=$('dEO').value=''; calcH(); calcC();
+  });
+
+  function csv(){
+    const head='codigo;especie;altura_m;radio_copa_m;diametro_copa_m;area_copa_m2;distancia_m;ang_base;ang_punta;fecha';
+    const n=v=>v==null?'':String(+v.toFixed(3)).replace('.',',');
+    return head+'\n'+rows.map(r=>[r.id,(r.sp||'').replace(/;/g,','),n(r.h),n(r.r),n(r.r!=null?r.r*2:null),n(r.a),n(r.d),n(r.tb),n(r.tt),r.fecha].join(';')).join('\n');
+  }
+  $('csv').addEventListener('click', () => {
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv()],{type:'text/csv'}));
+    a.download='arboles_'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+  $('share').addEventListener('click', async () => {
+    const file=new File(['﻿'+csv()],'arboles.csv',{type:'text/csv'});
+    try {
+      if (navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:'Mediciones de árboles'});
+      else if (navigator.share) await navigator.share({title:'Mediciones de árboles', text:csv()});
+      else { await navigator.clipboard.writeText(csv()); $('mReg').textContent='Copiado al portapapeles.'; }
+    } catch(_){}
+  });
+  let armed=false;
+  $('clear').addEventListener('click', () => {
+    if (!armed){ armed=true; $('clear').textContent='Toca otra vez para borrar'; setTimeout(()=>{armed=false; $('clear').textContent='Borrar todo';},3000); return; }
+    rows=[]; persist(); renderTable(); armed=false; $('clear').textContent='Borrar todo';
+  });
+
+  calcH(); calcC(); renderTable(); updateHint();
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
